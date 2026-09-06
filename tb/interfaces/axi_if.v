@@ -46,6 +46,16 @@ interface axi_if # (
 	logic   			   RVALID;
 	logic				   RREADY;
 	
-	
-	
+	clocking drv_cb @(posedge clk);
+		default input #1 output #1;
+		
+		output AWADDR,AWVALID,AWLEN,AWBURST,AWID;
+		output WDATA,WLAST,WVALID,WSTRB;
+		output BREADY;
+		output ARADDR,ARVALID,ARBURST,ARLEN,ARID;
+		output RREADY;
+		
+		input AWREADY,WREADY,ARREADY,BRESP,BID,BVALID;
+		input RDATA,RVALID,RID,RLAST,RRESP;
+	endclocking
 	
