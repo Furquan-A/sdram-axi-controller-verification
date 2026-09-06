@@ -57,5 +57,18 @@ interface axi_if # (
 		
 		input AWREADY,WREADY,ARREADY,BRESP,BID,BVALID;
 		input RDATA,RVALID,RID,RLAST,RRESP;
+		
+	endclocking
+	
+	clocking mon_cb @(posedge clk);
+
+		default input #1step output #0;
+
+		input AWADDR, AWVALID, AWLEN, AWBURST, AWID, AWREADY;
+		input WDATA, WLAST, WVALID, WSTRB, WREADY;
+		input BRESP, BID, BVALID, BREADY;
+		input ARADDR, ARVALID, ARBURST, ARLEN, ARID, ARREADY;
+		input RDATA, RVALID, RID, RLAST, RRESP, RREADY;
+
 	endclocking
 	
