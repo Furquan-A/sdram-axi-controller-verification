@@ -30,3 +30,22 @@ interface axi_if # (
 	logic                 BVALID;
 	logic                 BREADY;
 	
+	// --- AR Read Address channel --------
+	logic [ADDR_WIDTH-1:0] ARADDR;
+	logic [ID_WIDTH-1:0]   ARID;
+	logic 				   ARVALID;
+	logic 				   ARREADY;
+	logic [LEN_WIDTH-1:0]  ARLEN;
+	logic [1:0] 		   ARBURST;
+	
+	// -- R Read Data Channel ------------
+	logic [DATA_WIDTH-1:0] RDATA;
+	logic [ID_WIDTH-1:0]   RID;
+	logic [1:0]     	   RRESP;
+	logic 				   RLAST;
+	logic   			   RVALID;
+	logic				   RREADY;
+	
+	
+	
+	
