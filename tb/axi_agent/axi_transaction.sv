@@ -7,16 +7,29 @@ class axi_transaction extends uvm_sequence_item;
 	parameter int AXI_ADDR_WIDTH = 32;
 	parameter int AXI_DATA_WIDTH = 32;
 	parameter int ID_WIDTH   = 4;
-	parameter int LEN_WIDTH  = ;
+	parameter int LEN_WIDTH  = 8;
 	
 	function new(string name = "axi_transaction");
 		super.name(name);
 	endfunction 
 	
-	typedef enum logic [1:0] burst_type{FIXED,INCR,WRAP}burst_type_e;
-	typedef enum logic [1:0] resp_type{OKAY,EXOKAY,SLVERR,DECERR}resp_type_e;
-	typedef enum {READ,WRITE}op_e;
+	typedef enum logic [1:0] {
+		FIXED = 2'b00,
+		INCR  = 2'b01,
+		WRAP  = 2'b10
+	} burst_type_e;
+	typedef enum logic [1:0] {
+		OKAY = 2'b00,
+		EXOKAY = 2'b01,
+		SLVERR = 2'b10,
+		DECERR = 2'b11
+	}resp_type_e;
 	
+	typedef enum logic {
+		READ  = 1'b0,
+		WRITE = 1'b1
+	} op_e;
+		
 	rand logic [AXI_ADDR_WIDTH-1:0] addr;
 	rand logic [AXI_DATA_WIDTH-1:0] w_data[];
 	rand logic [(AXI_DATA_WIDTH/8)-1:0] wstrb[];
@@ -31,23 +44,25 @@ class axi_transaction extends uvm_sequence_item;
 	resp_type_e                bresp; // One resp for one complete Transaction
 	resp_type_e                rresp[]; // each beat needs one rresp 
 	
+	
+	
 	// constraints 
 	constraint burst_size_c {
 		w_data.size() == length+1;
 		wstrb.size()  == length+1;
 	}
 	
-	constraint fixed_burst_type_c {
+	constraint fixed_burst_length_c {
 		if (burst == FIXED)
 			length inside {[0:15]};
 	}
 
-	constraint incr_burst_type_c {
+	constraint incr_burst_length_c {
 		if (burst == INCR)
 			length inside {[0:255]};
 	}
 
-	constraint wrap_burst_type_c {
+	constraint wrap_burst_length_c {
 		if (burst == WRAP)
 			length inside {1, 3, 7, 15};
 	}
@@ -64,7 +79,7 @@ class axi_transaction extends uvm_sequence_item;
 	}
 	
 	constraint address_range_c {
-		addr inside {[32'h0000_0000 : 32'h01FF_FFFF]}; // 0 - 33,554,431
+		addr inside {[32'h0000_0000 : 32'h01FF_FFFF]}; // 0 - 33,554,431 -- 4K mem
 	}
 	
 	constraint address_aligned_c {
@@ -78,5 +93,17 @@ class axi_transaction extends uvm_sequence_item;
 			<= 4096;
 	}
 	
+	constraint wrap_burst_c {
+		if (burst == WRAP)
+			length inside {1,3,7,15}; // inside [2,4,8,16]
+	}
+	
+	constraint incr_burst_address_c {
+		if(burst == INCR)
+			(addr + ((AXI_DATA_WIDTH/8)*(length+1))-1) <= 32'h01FF_FFFF;
+	}
+	
+	
 	
 endclass
+	
