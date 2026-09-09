@@ -12,7 +12,7 @@ class axi_monitor extends uvm_monitor;
 	
 	function new(string name = "axi_monitor", uvm_component parent);
 		super.new(name,parent);
-		ap = new("ap);
+		ap = new("ap");
 	endfunction 
 	
 	function void build_phase(uvm_phase phase);
