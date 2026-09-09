@@ -39,21 +39,20 @@ class axi_monitor extends uvm_monitor;
 		logic [LEN_WIDTH-1:0] wlen;
 		logic [1:0] burst;
 		
-		
-		if(vif.mon_cb.AWVALID && vif.mon_cb.AWREADY)
-			begin
-				waddr = vif.mon_cb.AWADDR;
-				wid  = vif.mon_cb.AWID;
-				wlen = vif.mon_cb.AWLEN;
+		forever 
+			begin 
+				@(vif.mon_cb)
+				if(vif.mon_cb.AWVALID && vif.mon_cb.AWREADY)
+					begin
+						waddr = vif.mon_cb.AWADDR;
+						wid  = vif.mon_cb.AWID;
+						wlen = vif.mon_cb.AWLEN;
+						burst = vif.mon_cb.AWBURST;
+						break;
+					end
 			end 
-		else
-			begin 
-				wait @(mon_cb)
 			
-		if(vif.mon_cb.WVALID && vif.mon_cb.WREADY)
-			begin 
-			burst = vif.mon_cb.AWLEN+1;
-			
+					
 			
 			
 	endtask
