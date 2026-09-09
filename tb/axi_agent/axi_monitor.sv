@@ -38,6 +38,10 @@ class axi_monitor extends uvm_monitor;
 		logic [ID_WIDTH-1:0] wid;
 		logic [LEN_WIDTH-1:0] wlen;
 		logic [1:0] burst;
+		logic [7:0] beats;
+		logic [(AXI_DATA_WIDTH/8)-1:0] wstrb[];
+		bit wlast;
+		int i;
 		
 		forever 
 			begin 
@@ -47,13 +51,35 @@ class axi_monitor extends uvm_monitor;
 						waddr = vif.mon_cb.AWADDR;
 						wid  = vif.mon_cb.AWID;
 						wlen = vif.mon_cb.AWLEN;
-						burst = vif.mon_cb.AWBURST;
+						burst = vif.mon_cb.AWBURST; // Burst Type 
 						break;
 					end
 			end 
 			
-					
-			
-			
+		wdata= new[wlen+1];
+		wstrb= new[wlen+1];
+		beats = 0;
+		while(beats<wlen+1)
+		begin
+			@(vif.mon_cb);
+			if(vif.mon_cb.WVALID && vif.mon_cb.WREADY)
+				begin 
+					wdata[beats] = vif.mon_cb.WDATA;
+					wstrb[beats] = vif.mon_cb.WSTRB;
+					if ((beats < wlen) && vif.mon_cb.WLAST) 
+						begin
+						`uvm_error("AXI_MON",$sformatf("WLAST asserted early. Beat=%0d Expected last beat=%0d",beats, wlen))
+					end
+
+					// WLAST missing on final beat
+					if ((beats == wlen) && !vif.mon_cb.WLAST) 
+						begin
+						`uvm_error("AXI_MON",$sformatf("WLAST missing on final beat. Beat=%0d",beats))
+					end
+
+					// One accepted W handshake = one completed beat
+					beats++;
+				end
+		end
 	endtask
 endclass 
