@@ -4,7 +4,7 @@ class axi_monitor extends uvm_monitor;
 
     virtual axi_if.MONITOR vif;
 
-    // Monitor publishes completed AXI transactions
+    // Publishes completed AXI transactions
     uvm_analysis_port #(axi_transaction) ap;
 
 
@@ -12,7 +12,6 @@ class axi_monitor extends uvm_monitor;
                  uvm_component parent = null);
 
         super.new(name, parent);
-
         ap = new("ap", this);
 
     endfunction
@@ -37,48 +36,43 @@ class axi_monitor extends uvm_monitor;
 
     task run_phase(uvm_phase phase);
 
-        /*
-         * For now we are monitoring writes only.
-         *
-         * Later this becomes:
-         *
-         * fork
-         *     begin
-         *         forever
-         *             monitor_write_transaction();
-         *     end
-         *
-         *     begin
-         *         forever
-         *             monitor_read_transaction();
-         *     end
-         * join
-         */
+        // Read and write activity can happen independently,
+        // so monitor both concurrently.
+        fork
 
-        forever begin
-            monitor_write_transaction();
-        end
+            begin
+                forever begin
+                    monitor_write_transaction();
+                end
+            end
+
+            begin
+                forever begin
+                    monitor_read_transaction();
+                end
+            end
+
+        join
 
     endtask
 
 
+    // =========================================================
+    // WRITE MONITOR
+    // =========================================================
     task monitor_write_transaction();
 
         axi_transaction tr;
         int unsigned beats;
 
-        // -----------------------------------------
-        // Create a NEW transaction for this burst
-        // -----------------------------------------
         tr = axi_transaction::type_id::create("write_tr");
 
         tr.op = axi_transaction::WRITE;
 
 
-        // =========================================
+        // =====================================================
         // AW CHANNEL
-        // =========================================
-
+        // =====================================================
         forever begin
 
             @(vif.mon_cb);
@@ -102,20 +96,18 @@ class axi_monitor extends uvm_monitor;
         end
 
 
-        // =========================================
-        // Allocate W beat storage
-        // =========================================
-
+        // =====================================================
+        // Allocate Write Beat Storage
+        // =====================================================
         tr.w_data = new[tr.length + 1];
         tr.wstrb  = new[tr.length + 1];
 
         beats = 0;
 
 
-        // =========================================
+        // =====================================================
         // W CHANNEL
-        // =========================================
-
+        // =====================================================
         while (beats < (tr.length + 1)) begin
 
             @(vif.mon_cb);
@@ -123,22 +115,27 @@ class axi_monitor extends uvm_monitor;
             if (vif.mon_cb.WVALID &&
                 vif.mon_cb.WREADY) begin
 
-                // Capture one accepted W beat
                 tr.w_data[beats] = vif.mon_cb.WDATA;
                 tr.wstrb[beats]  = vif.mon_cb.WSTRB;
 
 
-                // -----------------------------
                 // WLAST asserted too early
-                // -----------------------------
-                if ((beats < tr.length)&&vif.mon_cb.WLAST) 
-					begin
-						`uvm_error("AXI_MON",$sformatf("WLAST asserted early. Beat=%0d Expected last beat=%0d",beats,tr.length))
+                if ((beats < tr.length) &&
+                    vif.mon_cb.WLAST) begin
 
-					end
-                // -----------------------------
+                    `uvm_error(
+                        "AXI_MON",
+                        $sformatf(
+                            "WLAST asserted early. Beat=%0d Expected last beat=%0d",
+                            beats,
+                            tr.length
+                        )
+                    )
+
+                end
+
+
                 // WLAST missing on final beat
-                // -----------------------------
                 if ((beats == tr.length) &&
                     !vif.mon_cb.WLAST) begin
 
@@ -153,7 +150,6 @@ class axi_monitor extends uvm_monitor;
                 end
 
 
-                // One handshake = one accepted beat
                 beats++;
 
             end
@@ -161,10 +157,9 @@ class axi_monitor extends uvm_monitor;
         end
 
 
-        // =========================================
+        // =====================================================
         // B CHANNEL
-        // =========================================
-
+        // =====================================================
         forever begin
 
             @(vif.mon_cb);
@@ -173,7 +168,7 @@ class axi_monitor extends uvm_monitor;
                 vif.mon_cb.BREADY) begin
 
 
-                // Check response ID
+                // Response ID should match request ID
                 if (vif.mon_cb.BID != tr.id) begin
 
                     `uvm_error(
@@ -188,7 +183,6 @@ class axi_monitor extends uvm_monitor;
                 end
 
 
-                // Capture write response
                 tr.bresp =
                     axi_transaction::resp_type_e'(
                         vif.mon_cb.BRESP
@@ -201,10 +195,9 @@ class axi_monitor extends uvm_monitor;
         end
 
 
-        // =========================================
-        // Complete write transaction
-        // =========================================
-
+        // =====================================================
+        // Complete Write Transaction
+        // =====================================================
         `uvm_info(
             "AXI_MON",
             $sformatf(
@@ -219,118 +212,173 @@ class axi_monitor extends uvm_monitor;
         )
 
 
-        // Broadcast completed transaction
+        // Publish completed write transaction
         ap.write(tr);
 
     endtask
-	
-	task monitor_read_transaction();
-		axi_transaction tr;
-		tr = axi_transaction::type_id::create("tr);
-		
-		tr.op = axi_transaction::READ;
-		
-		// AR Channel 
-		forever 
-			begin
-				@(vif.mon_cb);
-				if(vif.mon_cb.ARVALID && vif.mon_cb.ARREADY)
-					begin 
-						tr.addr = vif.mon_cb.ARADDR;
-						tr.id   = vif.mon_cb.ARID;
-						tr.lenght = vif.mon_cb.ARLEN;
-						tr.burst =axi_transaction::burst_type_e'(vif.mon_cb.ARBURST);
-						break;
-					end 
-			end 
-			
-		tr.w_data = new[tr.length + 1];
-        tr.wstrb  = new[tr.length + 1];
-		
-		while (beats <tr.lenght+1) 
-			begin 
-				@(vif.mon_cb);
-				if(vif.mon_cb.WVALID && vif.mon_cb.WREADY)
-					begin 
-						tr.rdata[beats] = vif.mon_cb.RDATA;
-						tr.rresp[beats] = axi_transaction::resp_type_e'(vif.mon_cb.RRESP);
-						
-						// -----------------------------
-						// WLAST asserted too early
-						// -----------------------------
-						if ((beats < tr.length)&&vif.mon_cb.WLAST) 
-							begin
-								`uvm_error("AXI_MON",$sformatf("WLAST asserted early. Beat=%0d Expected last beat=%0d",beats,tr.length))
-
-							end
-						
-						 if (vif.mon_cb.RID != tr.id) 
-							begin
-
-								`uvm_error(
-									"AXI_MON",
-									$sformatf(
-										"RID mismatch. Expected RID=%0d Received RID=%0d",
-										tr.id,
-										vif.mon_cb.RID
-									)
-								)
-
-							end
-							
-						// RLAST asserted too early
-						if ((beats < tr.length) &&
-							vif.mon_cb.RLAST) begin
-
-							`uvm_error(
-								"AXI_MON",
-								$sformatf(
-									"RLAST asserted early. Beat=%0d Expected last beat=%0d",
-									beats,
-									tr.length
-								)
-							)
-
-						end
 
 
-						// RLAST missing on final beat
-						if ((beats == tr.length) &&
-							!vif.mon_cb.RLAST) begin
 
-							`uvm_error(
-								"AXI_MON",
-								$sformatf(
-									"RLAST missing on final beat. Beat=%0d",
-									beats
-								)
-							)
+    // =========================================================
+    // READ MONITOR
+    // =========================================================
+    task monitor_read_transaction();
 
-						end
+        axi_transaction tr;
+        int unsigned beats;
+
+        tr = axi_transaction::type_id::create("read_tr");
+
+        tr.op = axi_transaction::READ;
 
 
-						// One R handshake = one accepted read beat
-						beats++;
+        // =====================================================
+        // AR CHANNEL
+        // =====================================================
+        forever begin
 
-					end
+            @(vif.mon_cb);
 
-				end
-		
-		// =========================================
-		// Complete read transaction
-		// =========================================
+            if (vif.mon_cb.ARVALID &&
+                vif.mon_cb.ARREADY) begin
 
-		`uvm_info(
-			"AXI_MON",
-			$sformatf(
-				"Observed READ: ADDR=0x%08h ID=%0d LEN=%0d BURST=%s BEATS=%0d",
-				tr.addr,
-				tr.id,
-				tr.length,
-				tr.burst.name(),
-				tr.length + 1
-			),
-			UVM_MEDIUM
-		)
+                tr.addr   = vif.mon_cb.ARADDR;
+                tr.id     = vif.mon_cb.ARID;
+                tr.length = vif.mon_cb.ARLEN;
+
+                tr.burst =
+                    axi_transaction::burst_type_e'(
+                        vif.mon_cb.ARBURST
+                    );
+
+                break;
+
+            end
+
+        end
+
+
+        // =====================================================
+        // Allocate Read Beat Storage
+        // =====================================================
+        tr.r_data = new[tr.length + 1];
+        tr.rresp  = new[tr.length + 1];
+
+        beats = 0;
+
+
+        // =====================================================
+        // R CHANNEL
+        // =====================================================
+        while (beats < (tr.length + 1)) begin
+
+            @(vif.mon_cb);
+
+            if (vif.mon_cb.RVALID &&
+                vif.mon_cb.RREADY) begin
+
+
+                // Capture this accepted read beat
+                tr.r_data[beats] = vif.mon_cb.RDATA;
+
+                tr.rresp[beats] =
+                    axi_transaction::resp_type_e'(
+                        vif.mon_cb.RRESP
+                    );
+
+
+                // RID should match ARID
+                if (vif.mon_cb.RID != tr.id) begin
+
+                    `uvm_error(
+                        "AXI_MON",
+                        $sformatf(
+                            "RID mismatch. Expected RID=%0d Received RID=%0d",
+                            tr.id,
+                            vif.mon_cb.RID
+                        )
+                    )
+
+                end
+
+
+                // RLAST asserted too early
+                if ((beats < tr.length) &&
+                    vif.mon_cb.RLAST) begin
+
+                    `uvm_error(
+                        "AXI_MON",
+                        $sformatf(
+                            "RLAST asserted early. Beat=%0d Expected last beat=%0d",
+                            beats,
+                            tr.length
+                        )
+                    )
+
+                end
+
+
+                // RLAST missing on final beat
+                if ((beats == tr.length) &&
+                    !vif.mon_cb.RLAST) begin
+
+                    `uvm_error(
+                        "AXI_MON",
+                        $sformatf(
+                            "RLAST missing on final beat. Beat=%0d",
+                            beats
+                        )
+                    )
+
+                end
+
+
+                // One accepted R handshake = one beat
+                beats++;
+
+            end
+
+        end
+
+
+        // =====================================================
+        // Complete Read Transaction
+        // =====================================================
+        `uvm_info(
+            "AXI_MON",
+            $sformatf(
+                "Observed READ: ADDR=0x%08h ID=%0d LEN=%0d BURST=%s BEATS=%0d",
+                tr.addr,
+                tr.id,
+                tr.length,
+                tr.burst.name(),
+                tr.length + 1
+            ),
+            UVM_MEDIUM
+        )
+
+
+        // Optionally print each returned beat
+        foreach (tr.r_data[i]) begin
+
+            `uvm_info(
+                "AXI_MON",
+                $sformatf(
+                    "READ Beat[%0d]: RDATA=0x%08h RRESP=%s",
+                    i,
+                    tr.r_data[i],
+                    tr.rresp[i].name()
+                ),
+                UVM_MEDIUM
+            )
+
+        end
+
+
+        // Publish completed read transaction
+        ap.write(tr);
+
+    endtask
+
 
 endclass
