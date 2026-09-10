@@ -83,6 +83,8 @@ class sdram_monitor extends uvm_monitor;
 								row  = open_row[bank_index];
 								column = column_addr;
 								$display("READ BANK=%0d ROW=0x%0h COLUMN=0x%0h",bank_index,open_row[bank_index],column_addr);
+								if (vif.mon_cb.sdram_addr[10] == 1'b1)
+									auto_precharge_pending[bank_index] = 1;
 							end 
 						else 
 							`uvm_error($sformatf("READ issued to Bank %0d with no active row",bank_index))
