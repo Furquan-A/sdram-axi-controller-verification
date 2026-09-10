@@ -136,8 +136,6 @@ class axi_monitor extends uvm_monitor;
 						`uvm_error("AXI_MON",$sformatf("WLAST asserted early. Beat=%0d Expected last beat=%0d",beats,tr.length))
 
 					end
-
-
                 // -----------------------------
                 // WLAST missing on final beat
                 // -----------------------------
@@ -225,6 +223,114 @@ class axi_monitor extends uvm_monitor;
         ap.write(tr);
 
     endtask
+	
+	task monitor_read_transaction();
+		axi_transaction tr;
+		tr = axi_transaction::type_id::create("tr);
+		
+		tr.op = axi_transaction::READ;
+		
+		// AR Channel 
+		forever 
+			begin
+				@(vif.mon_cb);
+				if(vif.mon_cb.ARVALID && vif.mon_cb.ARREADY)
+					begin 
+						tr.addr = vif.mon_cb.ARADDR;
+						tr.id   = vif.mon_cb.ARID;
+						tr.lenght = vif.mon_cb.ARLEN;
+						tr.burst =axi_transaction::burst_type_e'(vif.mon_cb.ARBURST);
+						break;
+					end 
+			end 
+			
+		tr.w_data = new[tr.length + 1];
+        tr.wstrb  = new[tr.length + 1];
+		
+		while (beats <tr.lenght+1) 
+			begin 
+				@(vif.mon_cb);
+				if(vif.mon_cb.WVALID && vif.mon_cb.WREADY)
+					begin 
+						tr.rdata[beats] = vif.mon_cb.RDATA;
+						tr.rresp[beats] = axi_transaction::resp_type_e'(vif.mon_cb.RRESP);
+						
+						// -----------------------------
+						// WLAST asserted too early
+						// -----------------------------
+						if ((beats < tr.length)&&vif.mon_cb.WLAST) 
+							begin
+								`uvm_error("AXI_MON",$sformatf("WLAST asserted early. Beat=%0d Expected last beat=%0d",beats,tr.length))
 
+							end
+						
+						 if (vif.mon_cb.RID != tr.id) 
+							begin
+
+								`uvm_error(
+									"AXI_MON",
+									$sformatf(
+										"RID mismatch. Expected RID=%0d Received RID=%0d",
+										tr.id,
+										vif.mon_cb.RID
+									)
+								)
+
+							end
+							
+						// RLAST asserted too early
+						if ((beats < tr.length) &&
+							vif.mon_cb.RLAST) begin
+
+							`uvm_error(
+								"AXI_MON",
+								$sformatf(
+									"RLAST asserted early. Beat=%0d Expected last beat=%0d",
+									beats,
+									tr.length
+								)
+							)
+
+						end
+
+
+						// RLAST missing on final beat
+						if ((beats == tr.length) &&
+							!vif.mon_cb.RLAST) begin
+
+							`uvm_error(
+								"AXI_MON",
+								$sformatf(
+									"RLAST missing on final beat. Beat=%0d",
+									beats
+								)
+							)
+
+						end
+
+
+						// One R handshake = one accepted read beat
+						beats++;
+
+					end
+
+				end
+		
+		// =========================================
+		// Complete read transaction
+		// =========================================
+
+		`uvm_info(
+			"AXI_MON",
+			$sformatf(
+				"Observed READ: ADDR=0x%08h ID=%0d LEN=%0d BURST=%s BEATS=%0d",
+				tr.addr,
+				tr.id,
+				tr.length,
+				tr.burst.name(),
+				tr.length + 1
+			),
+			UVM_MEDIUM
+		)
 
 endclass
