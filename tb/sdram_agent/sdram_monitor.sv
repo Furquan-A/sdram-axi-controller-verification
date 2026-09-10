@@ -25,6 +25,9 @@ class sdram_monitor extends uvm_monitor;
 		super.run_phase(phase);
 		
 		logic [1:0] bank_index;
+		logic [8:0] column_addr;
+		logic [13:0] row;
+		logic [1:0] bank;
 		
 		row_valid[0] = 0;
 		row_valid[1] = 0;
@@ -62,4 +65,26 @@ class sdram_monitor extends uvm_monitor;
 										row_valid[i] = 0;
 									end
 							end 
+					end 
+					
+				if(!vif.mon_cb.sdram_cas && vif.mon_cb.sdram_we && !vif.mon_cb.sdram_cs && vif.mon_cb.sdram_ras)
+					begin
+						// READ Command 
+						// Select bank and column, and start read burst 
+						// bank has already been selected by the active command 
+						//open_row[bank_index] = vif.mon_cb.sdram_addr; // column addr for read 
+						bank_index  = vif.mon_cb.sdram_ba;
+						column_addr = vif.mon_cb.sdram_addr[8:0];
+						
+						if(row_valid[bank_index]== 1)
+							begin 
+								//reconstruct
+								bank = bank_index;
+								row  = open_row[bank_index];
+								column = column_addr;
+								$display("READ BANK=%0d ROW=0x%0h COLUMN=0x%0h",bank_index,open_row[bank_index],column_addr);
+							end 
+						else 
+							`uvm_error($sformatf("READ issued to Bank %0d with no active row",bank_index))
+					end 
 	endtask
