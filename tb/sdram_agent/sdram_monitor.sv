@@ -28,6 +28,9 @@ class sdram_monitor extends uvm_monitor;
 		logic [8:0] column_addr;
 		logic [13:0] row;
 		logic [1:0] bank;
+		logic [15:0] sdram_d_output;
+		logic [1:0] dqm;
+		bit sdram_dout_en;
 		
 		row_valid[0] = 0;
 		row_valid[1] = 0;
@@ -87,6 +90,36 @@ class sdram_monitor extends uvm_monitor;
 									auto_precharge_pending[bank_index] = 1;
 							end 
 						else 
-							`uvm_error($sformatf("READ issued to Bank %0d with no active row",bank_index))
+							`uvm_error("SDRAM_MON",$sformatf("READ issued to Bank %0d with no active row",bank_index))
+					end 
+					
+				if(!vif.mon_cb.sdram_cas && !vif.mon_cb.sdram_we && !vif.mon_cb.sdram_cs && !vif.mon_cb.sdram_ras)
+					begin 
+						// Write COMMAND
+						bank_index = vif.mon_cb.sdram_ba;
+						column_addr = vif.mon_cb.sdram_addr[8:0];
+						
+						if(row_valid[bank_index]==1)
+							begin 
+								bank = bank_index;
+								row  = open_row[bank_index];
+								column = column_addr;
+								$display("WRITE BANK=%0d ROW=0x%0h COLUMN=0x%0h",bank_index,open_row[bank_index],column_addr);
+								
+								sdram_d_output = vif.mon_cb.sdram_data_output;
+								dqm = vif.mon_cb.sdram_dqm;
+								sdram_dout_en = vif.mon_cb.sdram_data_out_en;
+
+								if (sdram_dout_en == 0)
+									`uvm_error("SDRAM_MON","SDRAM data output enable is 0 during WRITE")
+								
+								$display("sdram_d_output = 0x%0h  dqm = 0x%0b enable = %0b",sdram_d_output,dqm,sdram_dout_en);
+					
+								if(vif.mon_cb.sdram_addr[10] == 1)
+									auto_precharge_pending[bank_index] = 1;
+								
+							end 
+						else 
+							`uvm_error("SDRAM_MON",$sformatf("WRITE ISSUED to the bank %0d with no active row",bank_index))
 					end 
 	endtask
