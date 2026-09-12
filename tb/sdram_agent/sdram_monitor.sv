@@ -28,8 +28,10 @@ class sdram_monitor extends uvm_monitor;
 		logic [8:0] column_addr;
 		logic [13:0] row;
 		logic [1:0] bank;
-		logic [15:0] sdram_d_output;
-		logic [1:0] dqm;
+		logic [15:0] write_data[0:1];
+		logic [1:0] write_dqm[1:2];
+		bit write_burst_active; // Indicates that an SDRAM BL=2 write burst is currently in progress.
+		bit write_beat_count; // Tracks which 16-bit SDRAM write beat is being captured: 0 = first beat, 1 = second beat. 
 		bit sdram_dout_en;
 		
 		row_valid[0] = 0;
