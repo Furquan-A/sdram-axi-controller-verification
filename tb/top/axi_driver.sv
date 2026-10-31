@@ -85,10 +85,11 @@ class axi_driver extends uvm_driver #(axi_transaction);
 	// ---------------------------------------------------------
 
 	task drive_write(axi_transaction tr);
-
-		drive_aw(tr);
-		drive_w(tr);
-		receive_b(tr);
+		fork 
+			drive_aw(tr);
+			drive_w(tr);
+			receive_b(tr);
+		join
 
 	endtask
 
