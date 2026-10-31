@@ -99,9 +99,8 @@ default input #1step output #0;
 		input  BREADY,
 		input  ARADDR, ARVALID, ARBURST, ARLEN, ARID,
 		input  RREADY,
-
-		output AWREADY, WREADY,
-		output BRESP, BID, BVALID,
+		output AWREADY, WREADY;
+		output BRESP, BID, BVALID;
 		output ARREADY,
 		output RDATA, RVALID, RID, RLAST, RRESP
 	);
