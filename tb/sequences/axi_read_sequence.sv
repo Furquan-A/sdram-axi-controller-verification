@@ -1,7 +1,7 @@
 class axi_read_sequence uvm_sequence #(axi_transaction);
 	`uvm_object_utils(axi_read_sequence)
 	
-	function vnew(string name = "axi_read_sequence");
+	function new(string name = "axi_read_sequence");
 		super.new(name);
 	endfunction 
 	
@@ -14,12 +14,12 @@ class axi_read_sequence uvm_sequence #(axi_transaction);
 		start_item(tr);
 		
 		if(!tr.randomize() with {
-			op = READ;
-			addr = 32'h00000010;
-			id = 4'b4;
-			length = 0;
-			burst = INCR;
-			})
+			op == READ;
+			addr == 32'h00000010;
+			id == 4'd4;
+			length == 0;
+			burst == INCR;
+		})
 			`uvm_fatal("AXI_RD_SEQ","Randomization Failed")
 		finish_item(tr);
 	endtask 
