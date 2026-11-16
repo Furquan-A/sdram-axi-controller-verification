@@ -85,11 +85,25 @@ class axi_driver extends uvm_driver #(axi_transaction);
 	// ---------------------------------------------------------
 
 	task drive_write(axi_transaction tr);
-		fork 
-			drive_aw(tr);
-			drive_w(tr);
-			receive_b(tr);
+		int aw_delay;
+		int w_delay;
+		
+		aw_delay = $urandom_range(0,5);
+		w_delay = $urandom_range(0,5);
+		
+		fork
+			 
+			begin
+				repeat(aw_delay) @(vif.drv_cb);
+				drive_aw(tr);
+			end 
+			 
+			begin 
+				repeat(w_delay) @(vif.drv_cb);
+				drive_w(tr);
+			end 
 		join
+		receive_b(tr);
 
 	endtask
 
@@ -99,6 +113,8 @@ class axi_driver extends uvm_driver #(axi_transaction);
 	// ---------------------------------------------------------
 
 	task drive_aw(axi_transaction tr);
+		
+		int wait_count = 0;
 
 		vif.drv_cb.AWADDR <= tr.addr;
 		vif.drv_cb.AWID <= tr.id;
@@ -109,8 +125,15 @@ class axi_driver extends uvm_driver #(axi_transaction);
 		do
 			begin
 				@(vif.drv_cb);
+				if(vif.drv_cb.AWREADY !== 1'b1)
+					begin 
+						wait_count++;
+						if(wait_count>=100)
+							`uvm_fatal("AXI_DRV","wait limit has reached for AWREADY")
+					end
 			end
-		while(!vif.drv_cb.AWREADY);
+			
+		while(vif.drv_cb.AWREADY !== 1'b1);
 
 		vif.drv_cb.AWVALID <= 1'b0;
 
@@ -124,20 +147,30 @@ class axi_driver extends uvm_driver #(axi_transaction);
 	task drive_w(axi_transaction tr);
 
 		int beat;
+		int wait_count;
 
 		for(beat = 0; beat <= tr.length; beat++)
 			begin
-
+				
+				wait_count = 0;
+				
 				vif.drv_cb.WDATA <= tr.w_data[beat];
 				vif.drv_cb.WSTRB <= tr.wstrb[beat];
 				vif.drv_cb.WLAST <= (beat == tr.length);
 				vif.drv_cb.WVALID <= 1'b1;
 
 				do
-					begin
+					begin	
 						@(vif.drv_cb);
+						if(vif.drv_cb.WREADY !== 1'b1)
+							begin 
+								wait_count++;
+								if(wait_count >= 100)
+									`uvm_fatal("AXI_DRV",$sformatf("WREADY timeout at beat %0d",beat))
+							end
+										
 					end
-				while(!vif.drv_cb.WREADY);
+				while(vif.drv_cb.WREADY !== 1'b1);
 
 			end
 
@@ -152,14 +185,21 @@ class axi_driver extends uvm_driver #(axi_transaction);
 	// ---------------------------------------------------------
 
 	task receive_b(axi_transaction tr);
-
+		
+		int wait_count = 0;
 		vif.drv_cb.BREADY <= 1'b1;
 
 		do
 			begin
 				@(vif.drv_cb);
+				if(vif.drv_cb.BVALID !== 1'b1)
+					begin 
+						wait_count++;
+						if(wait_count >= 100)
+									`uvm_fatal("AXI_DRV","BVALID timeout has reached")
+					end
 			end
-		while(!vif.drv_cb.BVALID);
+		while(vif.drv_cb.BVALID !== 1'b1);
 
 		tr.bresp = resp_type_e'(vif.drv_cb.BRESP);
 
@@ -188,7 +228,8 @@ class axi_driver extends uvm_driver #(axi_transaction);
 	// ---------------------------------------------------------
 
 	task drive_ar(axi_transaction tr);
-
+		
+		int wait_count = 0;
 		vif.drv_cb.ARADDR <= tr.addr;
 		vif.drv_cb.ARID <= tr.id;
 		vif.drv_cb.ARLEN <= tr.length;
@@ -198,8 +239,15 @@ class axi_driver extends uvm_driver #(axi_transaction);
 		do
 			begin
 				@(vif.drv_cb);
+				if(vif.drv_cb.ARREADY !== 1'b1)
+					begin 
+						wait_count++;
+						if(wait_count>=100)
+							`uvm_fatal("AXI_DRV","wait limit has reached for ARREADY")
+					end
 			end
-		while(!vif.drv_cb.ARREADY);
+			
+		while(vif.drv_cb.ARREADY !== 1'b1);
 
 		vif.drv_cb.ARVALID <= 1'b0;
 
@@ -213,6 +261,7 @@ class axi_driver extends uvm_driver #(axi_transaction);
 	task receive_r(axi_transaction tr);
 
 		int beat;
+		int wait_count;
 
 		tr.r_data = new[tr.length + 1];
 		tr.rresp = new[tr.length + 1];
@@ -221,12 +270,18 @@ class axi_driver extends uvm_driver #(axi_transaction);
 
 		for(beat = 0; beat <= tr.length; beat++)
 			begin
-
+				wait_count = 0;
 				do
 					begin
 						@(vif.drv_cb);
+						if(vif.drv_cb.RVALID !== 1'b1)
+							begin 
+								wait_count++;
+								if(wait_count >= 100)
+										`uvm_fatal("AXI_DRV",$sformatf("RVALID timeout at beat %0d",beat))
+							end
 					end
-				while(!vif.drv_cb.RVALID);
+				while(vif.drv_cb.RVALID !==1'b1);
 
 				tr.r_data[beat] = vif.drv_cb.RDATA;
 				tr.rresp[beat] = resp_type_e'(vif.drv_cb.RRESP);
