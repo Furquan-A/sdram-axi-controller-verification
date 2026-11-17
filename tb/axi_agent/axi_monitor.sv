@@ -212,7 +212,7 @@ class axi_monitor extends uvm_monitor;
         )
 
 
-        // Publish completed write transaction
+        // Publish completed write transaction using TLM's to components like Scoreboard / Coverage Collectors
         ap.write(tr);
 
     endtask

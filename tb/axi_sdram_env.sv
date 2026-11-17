@@ -14,4 +14,12 @@ class axi_sdram_env extends uvm_env;
 		axi_agnth = axi_agent::type_id::create("axi_agnth",this);
 		sdram_agnth = sdram_agent::type_id::create("sdram_agnth",this);
 	endfunction 
-enclass 
+	
+	function void connect_phase(uvm_phase phase);
+		super.connect_phase(phase);
+		
+		axi_agnth.monh.ap.connect(sb.axi_imp);
+		
+	endfunction 
+	
+endclass 
