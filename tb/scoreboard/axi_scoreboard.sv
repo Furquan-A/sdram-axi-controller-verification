@@ -17,76 +17,161 @@ class axi_scoreboard extends uvm_scoreboard;
 		
 	endfunction 
 	
-	function void write(axi_transaction tr);
-		// We'll implement transaction processing here.
-		logic [31:0] beat_addr;
-		int wrap_size;
+	function automatic logic [31:0] calculate_beat_addr(
+		input logic [31:0] start_addr,
+		input int beat,
+		input burst_type_e burst,
+		input int num_beats
+	);
+
+		int unsigned wrap_size;
 		logic [31:0] wrap_boundary;
-		
-		if(tr.op == WRITE)
+		logic [31:0] beat_addr;
+
+		beat_addr = 'x;
+
+		// Check beat index
+		if(beat < 0 || beat >= num_beats)
+		begin
+			`uvm_error("AXI_SB", "Invalid beat index")
+			return 'x;
+		end
+
+		case(burst)
+
+			// -----------------------------------
+			// FIXED BURST
+			// -----------------------------------
+			FIXED:
 			begin
-				if(tr.w_data.size() != (int'(tr.length) + 1))
-					begin
-						`uvm_error("AXI_SB",$sformatf("WDATA SIZE MISMATCH: Expected=%0d, Actual=%0d",int'(tr.length) + 1,tr.w_data.size()))
-						return;
-					end
-
-				// Check write strobe array size
-				if(tr.wstrb.size() != (int'(tr.length) + 1))
-					begin
-						`uvm_error("AXI_SB",$sformatf("WSTRB SIZE MISMATCH: Expected=%0d, Actual=%0d",int'(tr.length) + 1,tr.wstrb.size()))
-						return;
-					end
-				for(int i = 0; i < tr.length+1; i++)
-					begin
-						case(tr.burst)
-							FIXED: beat_addr = tr.addr;
-							INCR : beat_addr = tr.addr + (i*4);
-							WRAP: 
-								begin 
-									wrap_size = (int'(tr.length) + 1) * 4;
-									wrap_boundary = tr.addr - (tr.addr % wrap_size);
-									beat_addr = wrap_boundary + ((tr.addr - wrap_boundary + (i << 2)) % wrap_size);
-
-								end
-							default : 
-								begin
-									`uvm_error("AXI_SB", "Unsupported burst type")
-									return;
-								end
-						endcase	
-						update_memory(beat_addr, tr.w_data[i], tr.wstrb[i]);
-					end
+				beat_addr = start_addr;
 			end
-		else if(tr.op == READ)
-			begin 
-				// We'll implement burst read checking next.
-				if(tr.r_data.size() !== tr.length+1)
-					begin 
-						`uvm_error("AXI_SB",$sformatf("RDATA SIZE MISMATCH: Expected=%0d, Actual=%0d",int'(tr.length) + 1,tr.r_data.size()))
+
+			// -----------------------------------
+			// INCREMENTING BURST
+			// -----------------------------------
+			INCR:
+			begin
+				beat_addr = start_addr + (beat * 4);
+			end
+
+			// -----------------------------------
+			// WRAPPING BURST
+			// -----------------------------------
+			WRAP:
+			begin
+
+				// Valid WRAP lengths: 2, 4, 8, 16 beats
+				if(!(num_beats inside {2, 4, 8, 16}))
+				begin
+					`uvm_error("AXI_SB", "Invalid WRAP burst length")
+					return 'x;
+				end
+
+				// Starting address must be 4-byte aligned
+				if(start_addr[1:0] !== 2'b00)
+				begin
+					`uvm_error("AXI_SB", "Unaligned WRAP starting address")
+					return 'x;
+				end
+
+				// Calculate total WRAP window size
+				wrap_size = num_beats * 4;
+
+				// Calculate lower WRAP boundary
+				wrap_boundary = start_addr - (start_addr % wrap_size);
+
+				// Calculate address of current beat
+				beat_addr = wrap_boundary +
+							((start_addr - wrap_boundary + (beat * 4))
+							 % wrap_size);
+
+			end
+
+			// -----------------------------------
+			// UNSUPPORTED BURST
+			// -----------------------------------
+			default:
+			begin
+				`uvm_error("AXI_SB", "Unsupported AXI burst type")
+				return 'x;
+			end
+
+		endcase
+
+		return beat_addr;
+
+	endfunction
+	
+	function void write(axi_transaction tr);
+		logic [31:0] beat_addr;
+		int unsigned num_beats;
+
+		if(tr == null) 
+			begin
+				`uvm_error("AXI_SB", "Null transaction")
+				return;
+			end
+
+		if($isunknown({tr.addr, tr.length}) || tr.addr[1:0] != 0) 
+			begin
+				`uvm_error("AXI_SB", "Invalid address or length")
+				return;
+			end
+
+		num_beats = int'(tr.length) + 1;
+
+		case(tr.op)
+			WRITE: 
+				begin
+					if(tr.w_data.size() != num_beats || tr.wstrb.size() != num_beats) begin
+						`uvm_error("AXI_SB", "WDATA/WSTRB size mismatch")
 						return;
 					end
-				for(int i = 0; i < tr.length+1; i++)
-					begin 
-						case(tr.burst)
-							FIXED: beat_addr = tr.addr;
-							INCR : beat_addr = tr.addr + (i*4);
-							WRAP: 
-								begin 
-									wrap_size = (int'(tr.length) + 1) * 4;
-									wrap_boundary = tr.addr - (tr.addr % wrap_size);
-									beat_addr = wrap_boundary + ((tr.addr - wrap_boundary + (i << 2)) % wrap_size);
+					
+					if(tr.bresp !== OKAY) begin
+						`uvm_error("AXI_SB", $sformatf("WRITE RESPONSE ERROR: BRESP=%0h, ADDR=%0h", tr.bresp, tr.addr))
+						return;
+					end
+					for(int i = 0; i < num_beats; i++) 
+						begin
+							beat_addr = calculate_beat_addr(tr.addr, i, tr.burst, num_beats);
+							if($isunknown(beat_addr)) 
+								return;
+							update_memory(beat_addr, tr.w_data[i], tr.wstrb[i]);
+						end
+				end
 
+			READ: 
+				begin
+					if(tr.r_data.size() != num_beats) 
+						begin
+							`uvm_error("AXI_SB", "RDATA size mismatch")
+							return;
+						end
+					if(tr.rresp.size() !== num_beats)
+						begin 
+							`uvm_error("AXI_SB","RRESP size mismatch")
+						end 
+					for(int i = 0; i < num_beats; i++) 
+						begin
+							beat_addr = calculate_beat_addr(tr.addr, i, tr.burst, num_beats);
+							if($isunknown(beat_addr)) 
+								return;
+							if(tr.rresp[i] == OKAY)
+								begin 
+									check_read(beat_addr, tr.r_data[i]);
 								end
-							default : 
-								begin
-									`uvm_error("AXI_SB", "Unsupported burst type")
-									return;
-								end
-						endcase
-						check_read(beat_addr,tr.r_data[i]);
-					end 
-			end
+							else 
+								begin 
+									`uvm_error("AXI_SB","Skip the Rdata comparison, ERROR has occured")	
+									continue;
+								end 
+						end	
+				end
+
+			default: `uvm_error("AXI_SB", "Unsupported operation")
+		endcase
 	endfunction
 	
 	function void update_memory(input logic [31:0] addr, input logic [31:0] wdata, input logic [3:0] wstrb);
