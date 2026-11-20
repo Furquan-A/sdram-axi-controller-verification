@@ -161,38 +161,16 @@ class axi_monitor extends uvm_monitor;
         // B CHANNEL
         // =====================================================
         forever begin
+			@(vif.mon_cb);
 
-            @(vif.mon_cb);
+			if(vif.mon_cb.BVALID === 1'b1 && vif.mon_cb.BREADY === 1'b1) begin
+				if(vif.mon_cb.BID !== tr.id)
+					`uvm_error("AXI_MON", $sformatf("BID mismatch: AWID=%0d BID=%0d", tr.id, vif.mon_cb.BID))
 
-            if (vif.mon_cb.BVALID &&
-                vif.mon_cb.BREADY) begin
-
-
-                // Response ID should match request ID
-                if (vif.mon_cb.BID != tr.id) begin
-
-                    `uvm_error(
-                        "AXI_MON",
-                        $sformatf(
-                            "BID mismatch. AWID=%0d BID=%0d",
-                            tr.id,
-                            vif.mon_cb.BID
-                        )
-                    )
-
-                end
-
-
-                tr.bresp =
-                    axi_transaction::resp_type_e'(
-                        vif.mon_cb.BRESP
-                    );
-
-                break;
-
-            end
-
-        end
+				tr.bresp = axi_transaction::resp_type_e'(vif.mon_cb.BRESP);
+				break;
+			end
+		end
 
 
         // =====================================================

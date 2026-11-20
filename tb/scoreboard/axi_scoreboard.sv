@@ -144,30 +144,22 @@ class axi_scoreboard extends uvm_scoreboard;
 
 			READ: 
 				begin
-					if(tr.r_data.size() != num_beats) 
-						begin
-							`uvm_error("AXI_SB", "RDATA size mismatch")
-							return;
+					if(tr.r_data.size() != num_beats || tr.rresp.size() != num_beats) begin
+						`uvm_error("AXI_SB", $sformatf("READ SIZE MISMATCH: Expected=%0d, RDATA=%0d, RRESP=%0d", num_beats, tr.r_data.size(), tr.rresp.size()))
+						return;
+					end
+
+					for(int i = 0; i < num_beats; i++) begin
+						beat_addr = calculate_beat_addr(tr.addr, i, tr.burst, num_beats);
+						if($isunknown(beat_addr)) return;
+
+						if(tr.rresp[i] !== OKAY) begin
+							`uvm_error("AXI_SB", $sformatf("READ RESPONSE ERROR: Beat=%0d, Addr=%0h, RRESP=%0h", i, beat_addr, tr.rresp[i]))
+							continue;
 						end
-					if(tr.rresp.size() !== num_beats)
-						begin 
-							`uvm_error("AXI_SB","RRESP size mismatch")
-						end 
-					for(int i = 0; i < num_beats; i++) 
-						begin
-							beat_addr = calculate_beat_addr(tr.addr, i, tr.burst, num_beats);
-							if($isunknown(beat_addr)) 
-								return;
-							if(tr.rresp[i] == OKAY)
-								begin 
-									check_read(beat_addr, tr.r_data[i]);
-								end
-							else 
-								begin 
-									`uvm_error("AXI_SB","Skip the Rdata comparison, ERROR has occured")	
-									continue;
-								end 
-						end	
+
+						check_read(beat_addr, tr.r_data[i]);
+					end
 				end
 
 			default: `uvm_error("AXI_SB", "Unsupported operation")
